@@ -1,6 +1,0 @@
-### POST создание заметки
-POST localhost:8000/notes
-Content-Type: application/x-www-form-urlencoded
-
-title = "My Note Title" &
-body = "What a great note"
