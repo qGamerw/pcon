@@ -1,6 +1,19 @@
-### POST создание заметки
-POST localhost:8000/notes
+### Создание заметки
+POST localhost:8000/notes/add
 Content-Type: application/x-www-form-urlencoded
 
-title = "My Note Title" &
+title = "My Note Title 3" &
 body = "What a great note"
+
+### Получении всех заметок
+GET localhost:8000/notes/all
+
+### Изменение заметки
+PUT  localhost:8000/notes/update/670d5d1b735fb595390351de
+Content-Type: application/x-www-form-urlencoded
+
+title = Updated Title &
+body = Updated body text
+
+### Удаление заметки
+DELETE localhost:8000/notes/delete/670d6282612abb5d02fe9484
