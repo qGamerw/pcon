@@ -1,70 +1,229 @@
 import React, {Component} from 'react';
 import SockJS from 'sockjs-client';
-
-// Определяем интерфейс для состояния компонента
-interface AppState {
-    time: string;
-    serverTime: string;
-}
-
-// URL для WebSocket-соединения с сервером
-const URL: string = 'http://127.0.0.1:9999/echo';
-// Создаем соединение через SockJS с сервером
-let SOCKET: WebSocket = new SockJS(URL);
+import {deleteNote, getAllNotes, sendNote, updateNote} from "./api/api";
+import {Button, Card, Form, Input, Space, Table} from "antd";
+import {AppState, Note, NoteRest} from "./type/InterfacesType";
 
 class App extends Component<{}, AppState> {
+    private socket: WebSocket | null = null;
+    private intervalId: NodeJS.Timeout | null = null;
+
     state: AppState = {
-        time: new Date().toLocaleTimeString(),
-        serverTime: 'нет данных',
+        data: [],
+        time: '',
+        serverTime: '',
+        newTitle: '',
+        newText: '',
+        id: ''
     };
 
-    // Объявляем переменную для хранения WebSocket-соединения
-
     componentDidMount() {
-        // Устанавливаем обработчик для события открытия соединения
-        SOCKET.onopen = () => {
-            console.log('open');
-            // Если соединение успешно установлено, отправляем сообщение на сервер
-            if (SOCKET) {
-                SOCKET.send('socket opened');
-            }
+        this.socket = new SockJS('http://127.0.0.1:9999/echo') as WebSocket;
+
+        this.socket.onopen = () => {
+            console.log('Соединение открыто');
+            this.getAll();
         };
 
-        // Устанавливаем обработчик для получения сообщений от сервера
-        SOCKET.onmessage = this.onMessage.bind(this);
-
-        // Устанавливаем обработчик для закрытия соединения
-        SOCKET.onclose = () => {
-            console.log('close');
+        this.socket.onmessage = this.onMessage;
+        this.socket.onclose = () => {
+            console.log('Соединение закрыто');
         };
 
-        setInterval(this.tick, 1000);
+        this.intervalId = setInterval(this.tick, 1000);
     }
 
-    // Обработчик для получения сообщений от сервера
+    componentWillUnmount() {
+        if (this.intervalId) {
+            clearInterval(this.intervalId);
+        }
+        if (this.socket) {
+            this.socket.close();
+        }
+    }
+
     onMessage = (messageEvent: MessageEvent) => {
         if (messageEvent.data) {
-            this.setState({
-                serverTime: messageEvent.data, // Обновляем serverTime значением, полученным от сервера
-            });
+            this.setState((prevState) => ({
+                ...prevState,
+                serverTime: messageEvent.data,
+            }));
         }
     };
 
-    // Функция для обновления текущего времени каждую секунду
+    // Обновляем локальное время
     tick = () => {
-        this.setState({
-            time: new Date().toLocaleTimeString(), // Обновляем локальное время в состоянии
-        });
+        this.setState((prevState) => ({
+            ...prevState,
+            time: new Date().toLocaleTimeString(),
+        }));
+    };
+
+    // Метод для отправки новой заметки
+    handleSendNote = async () => {
+        try {
+            const myNote: Note = {
+                title: this.state.newTitle,
+                body: this.state.newText,
+            };
+            await sendNote(myNote); // Отправляем заметку
+            await this.getAll(); // Обновляем список заметок
+            this.setState((prevState) => ({// Очищаем поля ввода
+                ...prevState,
+                newTitle: '',
+                newText: '',
+                id: ''
+            }));
+        } catch (err) {
+            console.log('Ошибка при добавлении записи:', err);
+        }
+    };
+
+    // Метод для удаления заметки
+    handleDeleteNote = async () => {
+        const {id} = this.state; // Получаем id
+        if (!id) {
+            console.log('ID заметки не указан');
+            return;
+        }
+        try {
+            await deleteNote(id); // Удаляем заметку
+            await this.getAll(); // Обновляем список заметок
+            this.setState((prevState) => ({// Очищаем поля ввода
+                ...prevState,
+                newTitle: '',
+                newText: '',
+                id: ''
+            }));
+        } catch (err) {
+            console.log('Ошибка при удалении записи:', err);
+        }
+    };
+
+    // Метод для обновления заметки
+    handleUpdateNote = async () => {
+        const {id, newTitle, newText} = this.state; // Получаем id, заголовок и текст
+        if (!id) {
+            console.log('ID заметки не указан');
+            return;
+        }
+        try {
+            await updateNote(id, {title: newTitle, body: newText}); // Обновляем заметку
+            await this.getAll(); // Обновляем список заметок
+            this.setState((prevState) => ({// Очищаем поля ввода
+                ...prevState,
+                newTitle: '',
+                newText: '',
+                id: ''
+            }));
+        } catch (err) {
+            console.log('Ошибка при обновлении записи:', err);
+        }
+    };
+
+    // Метод для получения всех заметок
+    getAll = async () => {
+        try {
+            const res: NoteRest[] = await getAllNotes(); // Получаем заметки
+            this.setState((prevState) => ({ // Обновляем состояние с новыми заметками
+                ...prevState,
+                data: res
+            }));
+        } catch (err) {
+            console.log('Ошибка при получении данных:', err);
+        }
+    };
+
+    handleIdChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        this.setState((prevState) => ({
+            ...prevState,
+            id: e.target.value,
+        }));
+    };
+
+    handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        this.setState((prevState) => ({
+            ...prevState,
+            newTitle: e.target.value,
+        }));
+    };
+
+    handleTextChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        this.setState((prevState) => ({
+            ...prevState,
+            newText: e.target.value,
+        }));
     };
 
     render() {
-        const {time, serverTime} = this.state;
+        const columns = [
+            {
+                title: 'Id',
+                dataIndex: '_id',
+                key: '_id',
+            },
+            {
+                title: 'Text',
+                dataIndex: 'text',
+                key: 'text',
+            },
+            {
+                title: 'Title',
+                dataIndex: 'title',
+                key: 'title',
+            },
+        ];
 
         return (
-            <div>
-                <h1>Время: {time}</h1>
-                <h1>Серверное время: {serverTime}</h1>
-            </div>
+            <Card
+                title={'Hello, world!'}
+                actions={[
+                    <h1 key="time">Время: {this.state.time}</h1>,
+                    <h1 key="serverTime">Серверное время: {this.state.serverTime}</h1>
+                ]}
+            >
+                <Table
+                    columns={columns}
+                    dataSource={this.state.data}
+                    rowKey="_id"
+                />
+                <Form layout="vertical">
+                    <Form.Item label="Id">
+                        <Input
+                            value={this.state.id}
+                            onChange={this.handleIdChange}
+                            placeholder="Введите id"
+                        />
+                    </Form.Item>
+                    <Form.Item label="Заголовок">
+                        <Input
+                            value={this.state.newTitle}
+                            onChange={this.handleTitleChange}
+                            placeholder="Введите заголовок"
+                        />
+                    </Form.Item>
+                    <Form.Item label="Текст">
+                        <Input
+                            value={this.state.newText}
+                            onChange={this.handleTextChange}
+                            placeholder="Введите текст"
+                        />
+                    </Form.Item>
+                    <Form.Item>
+                        <Space>
+                            <Button type="primary" onClick={this.handleSendNote}>
+                                Добавить запись
+                            </Button>
+                            <Button type="primary" onClick={this.handleDeleteNote}>
+                                Удалить запись
+                            </Button>
+                            <Button type="primary" onClick={this.handleUpdateNote}>
+                                Обновить запись
+                            </Button>
+                        </Space>
+                    </Form.Item>
+                </Form>
+            </Card>
         );
     }
 }
